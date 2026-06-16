@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TravelMind AI</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="workspace">
+        <aside class="panel input-panel" aria-label="Preferencias de viaje">
+          <div class="brand">
+            <div class="brand-mark">TM</div>
+            <div>
+              <p class="eyebrow">Planificador generativo</p>
+              <h1>TravelMind AI</h1>
+            </div>
+          </div>
+
+          <form id="travel-form" novalidate>
+            <div class="field">
+              <label for="destination">Destino</label>
+              <input id="destination" name="destination" type="text" placeholder="Ej. Madrid, Barcelona, Sevilla" />
+              <small class="error" data-error-for="destination"></small>
+            </div>
+
+            <div class="grid-2">
+              <div class="field">
+                <label for="days">Duración</label>
+                <input id="days" name="days" type="number" min="1" max="14" value="4" />
+                <small class="error" data-error-for="days"></small>
+              </div>
+              <div class="field">
+                <label for="budget">Presupuesto total</label>
+                <input id="budget" name="budget" type="number" min="100" step="50" value="900" />
+                <small class="error" data-error-for="budget"></small>
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="travelerType">Tipo de viajero</label>
+              <select id="travelerType" name="travelerType">
+                <option value="pareja">Pareja</option>
+                <option value="familia">Familia</option>
+                <option value="solo">Solo</option>
+                <option value="amigos">Grupo de amigos</option>
+                <option value="negocios">Negocios</option>
+              </select>
+            </div>
+
+            <fieldset class="field">
+              <legend>Intereses</legend>
+              <div class="chips" id="interests">
+                <label><input type="checkbox" value="cultura" checked /> Cultura</label>
+                <label><input type="checkbox" value="gastronomia" checked /> Gastronomía</label>
+                <label><input type="checkbox" value="naturaleza" /> Aire libre</label>
+                <label><input type="checkbox" value="aventura" /> Aventura</label>
+                <label><input type="checkbox" value="descanso" /> Descanso</label>
+                <label><input type="checkbox" value="vida nocturna" /> Vida nocturna</label>
+                <label><input type="checkbox" value="historia" /> Historia</label>
+                <label><input type="checkbox" value="compras" /> Compras</label>
+              </div>
+            </fieldset>
+
+            <div class="field">
+              <label for="restrictions">Restricciones o requisitos</label>
+              <textarea id="restrictions" name="restrictions" rows="4" placeholder="Ej. movilidad reducida, alergias, viajo con niños, comida vegetariana"></textarea>
+            </div>
+
+            <button class="primary-button" id="generate-btn" type="submit">
+              <span class="button-icon">✦</span>
+              Generar itinerario
+            </button>
+          </form>
+
+          <div class="quick-actions" aria-label="Ajustes rápidos">
+            <button type="button" data-variant="economica">Más económica</button>
+            <button type="button" data-variant="cultural">Más cultural</button>
+            <button type="button" data-variant="relajada">Más relajada</button>
+            <button type="button" data-variant="aventurera">Más aventurera</button>
+          </div>
+        </aside>
+
+        <section class="results">
+          <div class="toolbar">
+            <div>
+              <p class="eyebrow">Itinerario personalizado</p>
+              <h2 id="result-title">Listo para diseñar tu viaje</h2>
+            </div>
+            <div class="status-pill" id="quality-score">Calidad: pendiente</div>
+          </div>
+
+          <div class="notice" id="notice">
+            Completa tus preferencias y genera un plan de viaje. El prototipo simula LLM, RAG, fine-tuning y control de calidad con lógica local.
+          </div>
+
+          <div class="loading" id="loading" hidden>
+            <span></span>
+            Analizando preferencias, recuperando fuentes y generando propuesta...
+          </div>
+
+          <section class="itinerary-grid" id="itinerary" aria-live="polite"></section>
+
+          <section class="insight-grid">
+            <article class="panel compact">
+              <h3>Fuentes RAG recuperadas</h3>
+              <div id="rag-sources" class="source-list">
+                <p class="muted">Aparecerán después de generar el itinerario.</p>
+              </div>
+            </article>
+
+            <article class="panel compact">
+              <h3>Prompt estructurado</h3>
+              <pre id="prompt-output">El prompt se construirá con rol, contexto, preferencias, restricciones, formato de salida y criterios de calidad.</pre>
+            </article>
+
+            <article class="panel compact">
+              <h3>Control de calidad</h3>
+              <ul id="quality-list" class="check-list">
+                <li>Pendiente de validación.</li>
+              </ul>
+            </article>
+
+            <article class="panel compact">
+              <h3>Fine-tuning simulado</h3>
+              <p>
+                El prototipo usa plantillas de itinerarios bien valorados para imitar un modelo ajustado con datasets de viajes de alta calidad.
+              </p>
+            </article>
+          </section>
+        </section>
+      </section>
+    </main>
+
+    <template id="day-template">
+      <article class="day-card">
+        <div class="day-header">
+          <h3></h3>
+          <span></span>
+        </div>
+        <p class="day-theme"></p>
+        <div class="activity-list"></div>
+        <div class="day-footer">
+          <button type="button" class="feedback" data-feedback="like">Me gusta</button>
+          <button type="button" class="feedback" data-feedback="dislike">Mejorar</button>
+        </div>
+      </article>
+    </template>
+
+    <script src="app.js"></script>
+  </body>
+</html>
