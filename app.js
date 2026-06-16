@@ -457,6 +457,127 @@ Criterios de calidad:
 Evita repeticiones, respeta restricciones, mantén costos dentro del presupuesto, usa actividades relevantes y no recomiendes planes peligrosos, sesgados o incoherentes.`;
 }
 
+async function fetchCityCoordinates(destination) {
+  try {
+    const response = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(destination)}&format=json&limit=1`, {
+      headers: {
+        "Accept-Language": "es"
+      }
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    if (data && data.length > 0) {
+      return {
+        lat: parseFloat(data[0].lat),
+        lon: parseFloat(data[0].lon),
+        displayName: data[0].display_name
+      };
+    }
+  } catch (err) {
+    console.error("Error geocoding with Nominatim:", err);
+  }
+  return null;
+}
+
+async function fetchNearbyLandmarks(lat, lon) {
+  try {
+    const url = `https://es.wikipedia.org/w/api.php?` + new URLSearchParams({
+      action: "query",
+      generator: "geosearch",
+      prop: "extracts|pageimages|info",
+      inprop: "url",
+      exintro: "1",
+      explaintext: "1",
+      exsentences: "2",
+      piprop: "thumbnail",
+      pithumbsize: "300",
+      ggscoord: `${lat}|${lon}`,
+      ggsradius: "10000",
+      ggslimit: "25",
+      format: "json",
+      origin: "*"
+    });
+    const response = await fetch(url);
+    if (!response.ok) return [];
+    const data = await response.json();
+    const pages = data.query?.pages ? Object.values(data.query.pages) : [];
+    
+    // Filtramos para obtener artículos con descripciones reales
+    return pages.filter(page => page.extract && page.extract.length > 30);
+  } catch (err) {
+    console.error("Error fetching Wikipedia landmarks:", err);
+  }
+  return [];
+}
+
+function generateGlobalItinerary(preferences, landmarks, variant) {
+  const perDayBudget = Math.max(30, Math.floor(preferences.budget / preferences.days));
+  const variantBias = {
+    economica: { multiplier: 0.72, note: "Se priorizan paseos exteriores y alternativas económicas." },
+    cultural: { multiplier: 1.0, note: "Se explora en detalle el contexto histórico y cultural." },
+    relajada: { multiplier: 0.85, note: "Se proponen pausas y ritmos lentos." },
+    aventurera: { multiplier: 1.08, note: "Se proponen desplazamientos activos y zonas dinámicas." },
+    equilibrada: { multiplier: 0.95, note: "Se equilibra el tiempo entre visitas, traslados y pausas." },
+  }[variant];
+
+  const dailyCost = Math.round(perDayBudget * variantBias.multiplier);
+  const usedTitles = new Set();
+
+  return Array.from({ length: preferences.days }, (_, dayIndex) => {
+    const dayActivities = ["Mañana", "Tarde", "Noche"].map((moment, momentIdx) => {
+      let landmark = null;
+      for (let i = 0; i < landmarks.length; i++) {
+        const potential = landmarks[(dayIndex * 3 + momentIdx + i) % landmarks.length];
+        if (!usedTitles.has(potential.title)) {
+          landmark = potential;
+          break;
+        }
+      }
+      if (!landmark) {
+        landmark = landmarks[(dayIndex * 3 + momentIdx) % landmarks.length];
+      }
+      usedTitles.add(landmark.title);
+
+      const cost = Math.round((dailyCost / 3) * (0.85 + Math.random() * 0.3));
+
+      let tip = "Consulta horarios antes de ir y lleva calzado cómodo.";
+      const text = landmark.extract.toLowerCase();
+      if (text.includes("museo") || text.includes("galería")) {
+        tip = "Reserva entradas online con antelación para saltar la cola.";
+      } else if (text.includes("parque") || text.includes("jardín") || text.includes("plaza")) {
+        tip = "Lugar al aire libre ideal para recorrer a pie. ¡Lleva agua!";
+      } else if (text.includes("catedral") || text.includes("iglesia") || text.includes("basílica")) {
+        tip = "Verifica los requisitos de vestimenta para entrar al templo.";
+      } else if (text.includes("palacio") || text.includes("castillo")) {
+        tip = "Reserva el tour guiado para conocer la historia de sus salas.";
+      }
+
+      const alternative = `Pasear por los alrededores de ${landmark.title} o tomar un café en la zona.`;
+      const travelerNote = templates[preferences.travelerType];
+      const reason = `Este sitio icónico responde a tu interés en explorar ${preferences.destination}. Perfecto para viajar en ${preferences.travelerType} (${travelerNote}). ${variantBias.note}`;
+
+      return {
+        moment,
+        title: landmark.title,
+        place: `${preferences.destination}`,
+        cost,
+        tip,
+        alternative,
+        reason,
+        wikipediaUrl: landmark.fullurl,
+        imageUrl: landmark.thumbnail?.source || ""
+      };
+    });
+
+    return {
+      day: dayIndex + 1,
+      theme: `Exploración y puntos emblemáticos de ${preferences.destination}`,
+      cost: dayActivities.reduce((sum, act) => sum + act.cost, 0),
+      activities: dayActivities
+    };
+  });
+}
+
 function generateItinerary(preferences, sources, variant) {
   const cityKey = getCircuitCityKey(preferences.destination);
   if (cityKey) {
@@ -665,12 +786,33 @@ function renderItinerary(preferences, itinerary) {
     day.activities.forEach((activity) => {
       const item = document.createElement("div");
       item.className = "activity";
+      
+      let imgHtml = "";
+      if (activity.imageUrl) {
+        imgHtml = `
+          <div class="activity-image-container">
+            <img class="activity-image" src="${activity.imageUrl}" alt="${activity.title}" loading="lazy" />
+          </div>
+        `;
+      }
+
+      let wikiHtml = "";
+      if (activity.wikipediaUrl) {
+        wikiHtml = `
+          <a class="wiki-link" href="${activity.wikipediaUrl}" target="_blank" rel="noopener">
+            📖 Leer en Wikipedia
+          </a>
+        `;
+      }
+
       item.innerHTML = `
         <strong>${activity.moment}: ${activity.title}</strong>
+        ${imgHtml}
         <p><b>Lugar:</b> ${activity.place}</p>
         <p><b>Consejo local:</b> ${activity.tip}</p>
         <p><b>Alternativa:</b> ${activity.alternative}</p>
         <p><b>Justificación:</b> ${activity.reason}</p>
+        ${wikiHtml}
         <div class="meta-row">
           <span class="tag">${formatCurrency(activity.cost)}</span>
           <span class="tag">Editable</span>
@@ -722,11 +864,44 @@ function formatCurrency(value) {
     maximumFractionDigits: 0,
   }).format(value);
 }
+async function runGeneration(preferences, variant = "equilibrada") {
+  const cityKey = getCircuitCityKey(preferences.destination);
+  let sources = [];
+  let itinerary = [];
 
-function runGeneration(preferences, variant = "equilibrada") {
-  const sources = retrieveSources(preferences);
+  if (cityKey) {
+    // Flujo local predeterminado de España
+    sources = retrieveSources(preferences);
+    itinerary = generateItinerary(preferences, sources, variant);
+  } else {
+    // Flujo global dinámico mediante APIs de Nominatim y Wikipedia
+    try {
+      const coords = await fetchCityCoordinates(preferences.destination);
+      if (coords) {
+        const landmarks = await fetchNearbyLandmarks(coords.lat, coords.lon);
+        if (landmarks && landmarks.length >= 3) {
+          sources = landmarks.slice(0, 4).map((page) => ({
+            destination: preferences.destination.toLowerCase(),
+            title: page.title,
+            interests: ["cultura", "historia"],
+            summary: page.extract.substring(0, 160) + "...",
+            tips: ["Planifica tu visita temprano", "Revisa horarios online", "Saca fotos increíbles"]
+          }));
+          itinerary = generateGlobalItinerary(preferences, landmarks, variant);
+        }
+      }
+    } catch (err) {
+      console.error("Error al generar itinerario global:", err);
+    }
+
+    // Fallback si la API no devuelve atracciones
+    if (itinerary.length === 0) {
+      sources = retrieveSources(preferences);
+      itinerary = generateItinerary(preferences, sources, variant);
+    }
+  }
+
   const prompt = buildPrompt(preferences, sources, variant);
-  const itinerary = generateItinerary(preferences, sources, variant);
   const checks = qualityChecks(preferences, itinerary);
 
   lastPreferences = preferences;
@@ -736,6 +911,17 @@ function runGeneration(preferences, variant = "equilibrada") {
   renderSources(sources);
   renderItinerary(preferences, itinerary);
   renderQuality(checks);
+
+  // Mostrar y configurar enlaces a tours mundiales
+  const tourContainer = document.querySelector("#tour-links-container");
+  if (tourContainer) {
+    const cityName = preferences.destination;
+    document.querySelector("#viator-link").href = `https://www.viator.com/search/${encodeURIComponent(cityName)}?sortBy=rating`;
+    document.querySelector("#gyg-link").href = `https://www.getyourguide.com/s/?q=${encodeURIComponent(cityName)}`;
+    document.querySelector("#ta-link").href = `https://www.tripadvisor.com/Search?q=${encodeURIComponent(cityName)}`;
+    tourContainer.hidden = false;
+  }
+
   notice.textContent = `Itinerario generado con variante ${variant}. Puedes editar actividades o solicitar una versión ajustada.`;
   notice.style.color = "#66746f";
 }
@@ -749,9 +935,18 @@ form.addEventListener("submit", (event) => {
 
   loading.hidden = false;
   itineraryEl.innerHTML = "";
-  window.setTimeout(() => {
-    loading.hidden = true;
-    runGeneration(preferences, lastVariant);
+  
+  const tourContainer = document.querySelector("#tour-links-container");
+  if (tourContainer) tourContainer.hidden = true;
+
+  window.setTimeout(async () => {
+    try {
+      await runGeneration(preferences, lastVariant);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      loading.hidden = true;
+    }
   }, 650);
 });
 
@@ -761,9 +956,18 @@ quickActions.addEventListener("click", (event) => {
   lastVariant = button.dataset.variant;
   if (lastPreferences) {
     loading.hidden = false;
-    window.setTimeout(() => {
-      loading.hidden = true;
-      runGeneration(lastPreferences, lastVariant);
+    
+    const tourContainer = document.querySelector("#tour-links-container");
+    if (tourContainer) tourContainer.hidden = true;
+
+    window.setTimeout(async () => {
+      try {
+        await runGeneration(lastPreferences, lastVariant);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        loading.hidden = true;
+      }
     }, 420);
   } else {
     notice.textContent = "Primero genera un itinerario base para aplicar esta variante.";
