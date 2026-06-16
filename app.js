@@ -578,6 +578,52 @@ function generateGlobalItinerary(preferences, landmarks, variant) {
   });
 }
 
+async function enrichItineraryWithWikiData(itinerary, destination) {
+  try {
+    const coords = await fetchCityCoordinates(destination);
+    if (!coords) return itinerary;
+
+    const landmarks = await fetchNearbyLandmarks(coords.lat, coords.lon);
+    if (!landmarks || landmarks.length === 0) return itinerary;
+
+    let landmarkIndex = 0;
+    for (const day of itinerary) {
+      for (const activity of day.activities) {
+        const activityTitle = activity.title.toLowerCase();
+        const activityPlace = activity.place.toLowerCase();
+
+        // 1. Intentar buscar coincidencia directa de nombre
+        let match = landmarks.find(l => {
+          const lTitle = l.title.toLowerCase();
+          return activityTitle.includes(lTitle) || activityPlace.includes(lTitle) || lTitle.includes(activityTitle);
+        });
+
+        // 2. Si no hay coincidencia directa, buscar coincidencia por palabras clave
+        if (!match) {
+          match = landmarks.find(l => {
+            const words = l.title.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+            return words.some(w => activityTitle.includes(w));
+          });
+        }
+
+        // 3. Fallback: asignar un monumento de la lista secuencialmente para que siempre tenga foto real
+        if (!match) {
+          match = landmarks[landmarkIndex % landmarks.length];
+          landmarkIndex++;
+        }
+
+        if (match) {
+          activity.imageUrl = match.thumbnail?.source || "";
+          activity.wikipediaUrl = match.fullurl || "";
+        }
+      }
+    }
+  } catch (err) {
+    console.error("Error al enriquecer itinerario con WikiData:", err);
+  }
+  return itinerary;
+}
+
 function generateItinerary(preferences, sources, variant) {
   const cityKey = getCircuitCityKey(preferences.destination);
   if (cityKey) {
@@ -873,6 +919,11 @@ async function runGeneration(preferences, variant = "equilibrada") {
     // Flujo local predeterminado de España
     sources = retrieveSources(preferences);
     itinerary = generateItinerary(preferences, sources, variant);
+    try {
+      itinerary = await enrichItineraryWithWikiData(itinerary, preferences.destination);
+    } catch (e) {
+      console.error("Error al enriquecer itinerario local:", e);
+    }
   } else {
     // Flujo global dinámico mediante APIs de Nominatim y Wikipedia
     try {
