@@ -147,6 +147,41 @@
           </section>
         </section>
       </section>
+
+      <footer class="app-footer">
+        <div class="panel token-simulator-footer">
+          <div class="footer-left">
+            <h3>✦ Simulador de Tokens y Costos de API</h3>
+            <p class="muted" style="margin-bottom: 0;">Visualiza el consumo de recursos y costo simulado de este itinerario en tiempo real.</p>
+            <div class="field model-field">
+              <label for="model-pricing">Modelo de IA Simulado</label>
+              <select id="model-pricing" aria-label="Seleccionar modelo de IA para simulación de costos">
+                <option value="gemini-flash" selected>Gemini 1.5 Flash</option>
+                <option value="gemini-pro">Gemini 1.5 Pro</option>
+                <option value="gpt-4o-mini">GPT-4o Mini</option>
+                <option value="gpt-4o">GPT-4o (estándar)</option>
+              </select>
+            </div>
+          </div>
+          <div class="footer-right">
+            <div class="token-metric-badge">
+              <span class="badge-label">Tokens Entrada</span>
+              <strong id="input-tokens-val" class="badge-value">0</strong>
+            </div>
+            <div class="token-metric-badge">
+              <span class="badge-label">Tokens Salida</span>
+              <strong id="output-tokens-val" class="badge-value">0</strong>
+            </div>
+            <div class="token-metric-badge highlight">
+              <span class="badge-label">Costo Estimado</span>
+              <strong id="api-cost-val" class="badge-value">$0.00000</strong>
+            </div>
+          </div>
+        </div>
+        <div class="footer-notes">
+          <p class="muted">* Heurística académica para idioma español: 1 token ≈ 4 caracteres. Precios en USD actualizados según tarifas oficiales por millón de tokens.</p>
+        </div>
+      </footer>
     </main>
 
     <template id="day-template">

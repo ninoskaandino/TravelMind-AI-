@@ -962,6 +962,7 @@ async function runGeneration(preferences, variant = "equilibrada") {
   renderSources(sources);
   renderItinerary(preferences, itinerary);
   renderQuality(checks);
+  calculateAndRenderTokens(prompt, itinerary);
 
   // Mostrar y configurar enlaces a tours mundiales
   const tourContainer = document.querySelector("#tour-links-container");
@@ -975,6 +976,62 @@ async function runGeneration(preferences, variant = "equilibrada") {
 
   notice.textContent = `Itinerario generado con variante ${variant}. Puedes editar actividades o solicitar una versión ajustada.`;
   notice.style.color = "#66746f";
+}
+
+const modelPricing = {
+  "gemini-flash": { name: "Gemini 1.5 Flash", input: 0.075 / 1000000, output: 0.30 / 1000000 },
+  "gemini-pro": { name: "Gemini 1.5 Pro", input: 1.25 / 1000000, output: 5.00 / 1000000 },
+  "gpt-4o-mini": { name: "GPT-4o Mini", input: 0.15 / 1000000, output: 0.60 / 1000000 },
+  "gpt-4o": { name: "GPT-4o (estándar)", input: 5.00 / 1000000, output: 15.00 / 1000000 }
+};
+
+let currentPromptText = "";
+let currentItineraryData = null;
+
+function calculateAndRenderTokens(promptText, itinerary) {
+  if (!promptText || !itinerary) return;
+  
+  currentPromptText = promptText;
+  currentItineraryData = itinerary;
+
+  // 1. Calcular tokens de entrada (Prompt)
+  // Heurística en español: 1 token ≈ 4 caracteres
+  const inputTokens = Math.ceil(promptText.length / 4);
+
+  // 2. Calcular tokens de salida (Respuesta construida)
+  let responseText = "";
+  itinerary.forEach(day => {
+    responseText += (day.theme || "");
+    day.activities.forEach(activity => {
+      responseText += (activity.moment || "");
+      responseText += (activity.title || "");
+      responseText += (activity.place || "");
+      responseText += (activity.tip || "");
+      responseText += (activity.alternative || "");
+      responseText += (activity.reason || "");
+    });
+  });
+  
+  const outputTokens = Math.ceil(responseText.length / 4);
+
+  // 3. Obtener modelo seleccionado y calcular costo
+  const modelSelect = document.querySelector("#model-pricing");
+  const selectedModel = modelSelect ? modelSelect.value : "gemini-flash";
+  const rates = modelPricing[selectedModel] || modelPricing["gemini-flash"];
+
+  const cost = (inputTokens * rates.input) + (outputTokens * rates.output);
+
+  // 4. Renderizar métricas en el DOM
+  const inputTokensEl = document.querySelector("#input-tokens-val");
+  const outputTokensEl = document.querySelector("#output-tokens-val");
+  const apiCostEl = document.querySelector("#api-cost-val");
+
+  if (inputTokensEl) inputTokensEl.textContent = inputTokens.toLocaleString("es-ES");
+  if (outputTokensEl) outputTokensEl.textContent = outputTokens.toLocaleString("es-ES");
+  if (apiCostEl) {
+    const formattedCost = cost < 0.00001 ? `$${cost.toFixed(6)}` : `$${cost.toFixed(5)}`;
+    apiCostEl.textContent = formattedCost;
+  }
 }
 
 form.addEventListener("submit", (event) => {
@@ -1026,4 +1083,11 @@ quickActions.addEventListener("click", (event) => {
   }
 });
 
+document.querySelector("#model-pricing")?.addEventListener("change", () => {
+  if (currentPromptText && currentItineraryData) {
+    calculateAndRenderTokens(currentPromptText, currentItineraryData);
+  }
+});
+
 document.querySelector("#destination").value = "Madrid";
+
